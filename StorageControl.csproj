@@ -14,12 +14,4 @@
     <ProjectReference Include="..\Eco.Plugins\Eco.Plugins.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Remove="Stockpile.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="CavRnMods\StorageControl\ObjectOverrides.cs" />
-  </ItemGroup>
-
 </Project>
