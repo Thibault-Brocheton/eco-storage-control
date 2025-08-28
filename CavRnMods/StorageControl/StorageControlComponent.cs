@@ -10,11 +10,12 @@
     using Eco.Gameplay.Items;
     using Eco.Gameplay.Objects;
     using Eco.Shared.Localization;
+    using Eco.Shared.Logging;
     using Eco.Shared.Networking;
     using Eco.Shared.Serialization;
     using Eco.Shared.Utils;
-    using System.Collections;
     using System.Collections.Generic;
+    using System.Collections;
     using System.Reflection;
 
     [Serialized, Eco, Localized]
@@ -25,7 +26,6 @@
 
     [Serialized]
     [HasIcon("StorageComponent")]
-    [RequireComponent(typeof(StorageComponent))]
     [RequireComponent(typeof(LinkComponent))]
     [CreateComponentTabLoc("Storage Control", true), LocDescription("Customize storage rules."), Priority(PriorityAttribute.VeryLow)]
     public class StorageControlComponent : WorldObjectComponent
@@ -33,9 +33,9 @@
         public override WorldObjectComponentClientAvailability Availability => WorldObjectComponentClientAvailability.Always;
         [SyncToView] public override string IconName => "StorageComponent";
 
-        private StorageComponent storageComponent;
+        private StorageComponent? storageComponent;
         private LinkComponent linkComponent;
-        private StorageControlRestriction storageControlRestriction;
+        private StorageControlRestriction? storageControlRestriction;
 
         [Eco, Sort(1), LocDescription("Controls whether the listed items are forbidden in this storage (Blacklist) or whether only these items are allowed (Whitelist).")]
         public RestrictionMode RestrictionMode { get; set; } = RestrictionMode.Blacklist;
@@ -53,23 +53,21 @@
         {
             base.Initialize();
 
-            this.storageComponent = this.Parent.GetComponent<StorageComponent>();
             this.linkComponent = this.Parent.GetComponent<LinkComponent>();
-
-            this.linkComponent.OnLinked.Add(_ =>
-            {
-                if (this.Visibility == VisibilityMode.Hidden)
-                {
-                    //this.linkComponent.Destroy();
-                }
-            });
-
             this.Subscribe(nameof(this.Visibility), this.Apply);
-            this.Subscribe(nameof(this.RestrictionMode), this.Apply);
-            this.Items.Entries.Callbacks.OnChanged.Add(this.Apply);
 
-            this.storageControlRestriction = new StorageControlRestriction(this.RestrictionMode, this.Items.Entries.Select(s => Item.Get((Type)s)).ToArray());
-            this.storageComponent.Inventory.AddInvRestriction(this.storageControlRestriction);
+            this.storageComponent = this.Parent.GetComponent<StorageComponent>();
+            if (this.storageComponent is not null)
+            {
+                this.Subscribe(nameof(this.RestrictionMode), this.Apply);
+                this.Items.Entries.Callbacks.OnChanged.Add(this.Apply);
+                this.storageControlRestriction = new StorageControlRestriction(this.RestrictionMode, this.Items.Entries.Select(s => Item.Get((Type)s)).ToArray());
+                this.storageComponent.Inventory.AddInvRestriction(this.storageControlRestriction);
+            }
+            else
+            {
+                Log.WriteErrorLineLoc($"{this.Parent.Name} has no storage component but has StorageControlComponent.");
+            }
 
             this.Apply();
         }
@@ -108,7 +106,10 @@
                 }
             }
 
-            this.storageControlRestriction.UpdateRestrictions(this.RestrictionMode, this.Items.Entries.Select(s => Item.Get((Type)s)).ToArray());
+            if (this.storageComponent is not null)
+            {
+                this.storageControlRestriction!.UpdateRestrictions(this.RestrictionMode, this.Items.Entries.Select(s => Item.Get((Type)s)).ToArray());
+            }
         }
 
         /*public static void SortAlphabeticallyInternal(LinkComponent link, Player player)

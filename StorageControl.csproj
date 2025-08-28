@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="CavRnMods\StorageControl\Stockpile.cs" />
+    <None Include="CavRnMods\StorageControl\ObjectOverrides.cs" />
   </ItemGroup>
 
 </Project>
