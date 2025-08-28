@@ -4,7 +4,6 @@
     using Eco.Gameplay.Components.Storage;
     using Eco.Core.Controller;
     using Eco.Gameplay.Objects;
-    using Eco.Gameplay.Players;
     using Eco.Shared.Networking;
     using Eco.Shared.Serialization;
     using Eco.Core.Utils;
@@ -30,11 +29,11 @@
     public class StorageControlComponent : WorldObjectComponent, IHasEnvVars
     {
         public override WorldObjectComponentClientAvailability Availability => WorldObjectComponentClientAvailability.Always;
-
         [SyncToView] public override string IconName => "StorageComponent";
 
-        private StorageComponent storageComponent = null!;
-        private LinkComponent linkComponent = null!;
+        private StorageComponent storageComponent;
+        private LinkComponent linkComponent;
+        private StorageControlRestriction storageControlRestriction;
 
         [Eco, Sort(1), LocDescription("Controls whether the listed items are forbidden in this storage (Blacklist) or whether only these items are allowed (Whitelist).")]
         public RestrictionMode RestrictionMode { get; set; } = RestrictionMode.Blacklist;
@@ -53,8 +52,6 @@
         // UI Type ButtonGrid
         //[Autogen, RPC, UITypeName("BigButton")] public void SortAlphabetically(Player player) => SortAlphabeticallyInternal(this.linkComponent, player);
         //[Autogen, RPC] public void SortByType(Player player) => SortByTypeInternal(this.linkComponent, player);
-
-        private StorageControlRestriction storageControlRestriction;
 
         public override void Initialize()
         {
@@ -81,6 +78,14 @@
             this.Apply();
         }
 
+        public override void Destroy()
+        {
+            this.Unsubscribe(nameof(this.Visibility), this.Apply);
+            this.Unsubscribe(nameof(this.RestrictionMode), this.Apply);
+            this.Items.Entries.Callbacks.OnChanged.Remove(this.Apply);
+            base.Destroy();
+        }
+
         private void Apply()
         {
             this.linkComponent.Hidden = this.Visibility == VisibilityMode.Hidden;
@@ -91,6 +96,10 @@
             }
             else
             {
+                /* Not sure why, but adding a destroy here allows crafting component to correctly detect the storage when
+                 * world objects has been placed while the storage is hidden, and comes back to visible. Otherwise a double switch is necessary.
+                 * */
+                this.linkComponent.Destroy();
                 this.linkComponent.OnAfterObjectMoved();
             }
 
