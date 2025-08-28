@@ -11,12 +11,9 @@
     using Eco.Gameplay.Items;
     using Eco.Shared.Localization;
     using Eco.Shared.Utils;
-	using System.Collections.Generic;
-    using Eco.Shared.Logging;
 	using System.Linq;
 	using System;
     using Eco.Gameplay.Systems.EnvVars;
-    using Eco.Gameplay.Utils;
     using Eco.Gameplay.Civics.GameValues;
 
     [Serialized, Eco, Localized]
@@ -29,7 +26,7 @@
     [HasIcon("StorageComponent")]
     [RequireComponent(typeof(StorageComponent))]
     [RequireComponent(typeof(LinkComponent))]
-    [CreateComponentTabLoc("Storage Control", true), LocDescription("Customize storage rules."), Priority(1)]
+    [CreateComponentTabLoc("Storage Control", true), LocDescription("Customize storage rules."), Priority(PriorityAttribute.VeryLow), Sort(2)]
     public class StorageControlComponent : WorldObjectComponent, IHasEnvVars
     {
         public override WorldObjectComponentClientAvailability Availability => WorldObjectComponentClientAvailability.Always;
@@ -47,17 +44,17 @@
         [Eco, Sort(3), LocDescription("Control whether this storage is Hidden from other storages or Visible to them.")]
         public VisibilityMode Visibility { get; set; } = VisibilityMode.Visible;
 
-        [Autogen, RPC, UITypeName("BigButton"), Sort(6)]
+        /*[Autogen, RPC, UITypeName("BigButton"), Sort(6)]
         public void Apply(Player player)
         {
             this.Apply();
-        }
+        }*/
 
         // UI Type ButtonGrid
         //[Autogen, RPC, UITypeName("BigButton")] public void SortAlphabetically(Player player) => SortAlphabeticallyInternal(this.linkComponent, player);
         //[Autogen, RPC] public void SortByType(Player player) => SortByTypeInternal(this.linkComponent, player);
 
-        private List<InventoryRestriction> _savedRestrictions = new List<InventoryRestriction>();
+        private StorageControlRestriction storageControlRestriction;
 
         public override void Initialize()
         {
@@ -65,8 +62,6 @@
 
             this.storageComponent = this.Parent.GetComponent<StorageComponent>();
             this.linkComponent = this.Parent.GetComponent<LinkComponent>();
-
-            this._savedRestrictions = this.storageComponent.Inventory.Restrictions.ToList();
 
             this.linkComponent.OnLinked.Add(_ =>
             {
@@ -80,13 +75,14 @@
             this.Subscribe(nameof(this.RestrictionMode), this.Apply);
             this.Items.Entries.Callbacks.OnChanged.Add(this.Apply);
 
+            this.storageControlRestriction = new StorageControlRestriction(this.RestrictionMode, this.Items.Entries.Select(s => Item.Get((Type)s)).ToArray());
+            this.storageComponent.Inventory.AddInvRestriction(this.storageControlRestriction);
+
             this.Apply();
         }
 
         private void Apply()
         {
-            Log.WriteLineLoc($"Apply");
-
             this.linkComponent.Hidden = this.Visibility == VisibilityMode.Hidden;
 
             if (this.linkComponent.Hidden)
@@ -98,24 +94,10 @@
                 this.linkComponent.OnAfterObjectMoved();
             }
 
-            this.storageComponent.Inventory.ClearRestrictions();
-            this.storageComponent.Inventory.AddInvRestrictions(this._savedRestrictions);
-
-            if (this.Items.Entries.Any())
-            {
-                var itemTypes = this.Items.Entries.Cast<Type>().ToArray();
-                var desc = new LocString(string.Join(", ",
-                    itemTypes.Select(tt => Item.Get(tt).DisplayName)));
-
-                InventoryRestriction restriction = this.RestrictionMode == RestrictionMode.Whitelist
-                    ? new StorageControlWhitelistRestriction(itemTypes, desc)
-                    : new StorageControlBlacklistRestriction(itemTypes, desc);
-
-                this.storageComponent.Inventory.AddInvRestriction(restriction);
-            }
+            this.storageControlRestriction.UpdateRestrictions(this.RestrictionMode, this.Items.Entries.Select(s => Item.Get((Type)s)).ToArray());
         }
 
-        public static void SortAlphabeticallyInternal(LinkComponent link, Player player)
+        /*public static void SortAlphabeticallyInternal(LinkComponent link, Player player)
         {
             var linked = link.GetLinkedStoragesWithSettings(player.User).OrderBy(l => l.Storage.Parent.Name).ToList();
 
@@ -135,37 +117,31 @@
                 Log.WriteLineLoc($"BY TYPE - Priority of {linked[i].Storage.Parent.Name} is {linked[i].Settings.Priority}");
                 link.SetObjectPriority(player.User, linked[i].Storage, i);
             }
-        }
+        }*/
     }
 
-    public class StorageControlWhitelistRestriction : InventoryRestriction
+    public class StorageControlRestriction : InventoryRestriction
     {
-        private readonly Type[] _types;
-        private readonly LocString _descriptor;
+        private RestrictionMode _mode;
+        private Type[] _items;
+        private string _cachedDescription;
 
-        public StorageControlWhitelistRestriction(Type[] types, LocString descriptor)
+        public StorageControlRestriction(RestrictionMode mode, Item[] items)
         {
-            this._types = types;
-            this._descriptor = descriptor;
+            this.UpdateRestrictions(mode, items);
         }
 
-        public override LocString Message => Localizer.Do($"[StorageControl] Inventory allows only {this._descriptor}.");
-        public override int MaxAccepted(Item item, int currentQuantity) => this._types.Any(x => item.GetType().DerivesFrom(x)) ? -1 : 0;
-    }
-
-    public class StorageControlBlacklistRestriction : InventoryRestriction
-    {
-        private readonly Type[] _types;
-        private readonly LocString _descriptor;
-
-        public StorageControlBlacklistRestriction(Type[] types, LocString descriptor)
+        public void UpdateRestrictions(RestrictionMode mode, Item[] items)
         {
-            this._types = types;
-            this._descriptor = descriptor;
+            this._mode = mode;
+            this._items = items.Select(i => i.GetType()).ToArray();
+            this._cachedDescription = items.Any() ? string.Join(", ", items.Take(15).Select(i => i.MarkedUpName)) + (items.Length > 15 ? $"... + {items.Length - 15} items" : "") : "None";
         }
 
-        public override LocString Message => Localizer.Do($"[StorageControl] Inventory forbid {this._descriptor}.");
-        public override int MaxAccepted(Item item, int currentQuantity) => this._types.Any(x => item.GetType().DerivesFrom(x)) ? 0 : -1;
+        public override LocString Message => Localizer.Do($"[StorageControl] {this._mode} - {this._cachedDescription}.");
+        public override int MaxAccepted(Item item, int currentQuantity) => this._items.Any(x => item.GetType().DerivesFrom(x))
+            ? this._mode == RestrictionMode.Whitelist ? -1 : 0
+            : this._mode == RestrictionMode.Whitelist ? 0 : -1;
     }
 }
 
