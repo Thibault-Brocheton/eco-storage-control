@@ -1,19 +1,21 @@
 ﻿namespace CavRn.StorageControl
 {
-    using Eco.Gameplay.Components;
-    using Eco.Gameplay.Components.Storage;
-    using Eco.Core.Controller;
-    using Eco.Gameplay.Objects;
-    using Eco.Shared.Networking;
-    using Eco.Shared.Serialization;
-    using Eco.Core.Utils;
-    using Eco.Gameplay.Items;
-    using Eco.Shared.Localization;
-    using Eco.Shared.Utils;
 	using System.Linq;
 	using System;
-    using Eco.Gameplay.Systems.EnvVars;
+    using Eco.Core.Controller;
+    using Eco.Core.Utils;
     using Eco.Gameplay.Civics.GameValues;
+    using Eco.Gameplay.Components.Storage;
+    using Eco.Gameplay.Components;
+    using Eco.Gameplay.Items;
+    using Eco.Gameplay.Objects;
+    using Eco.Shared.Localization;
+    using Eco.Shared.Networking;
+    using Eco.Shared.Serialization;
+    using Eco.Shared.Utils;
+    using System.Collections;
+    using System.Collections.Generic;
+    using System.Reflection;
 
     [Serialized, Eco, Localized]
     public enum VisibilityMode { Hidden, Visible }
@@ -25,8 +27,8 @@
     [HasIcon("StorageComponent")]
     [RequireComponent(typeof(StorageComponent))]
     [RequireComponent(typeof(LinkComponent))]
-    [CreateComponentTabLoc("Storage Control", true), LocDescription("Customize storage rules."), Priority(PriorityAttribute.VeryLow), Sort(2)]
-    public class StorageControlComponent : WorldObjectComponent, IHasEnvVars
+    [CreateComponentTabLoc("Storage Control", true), LocDescription("Customize storage rules."), Priority(PriorityAttribute.VeryLow)]
+    public class StorageControlComponent : WorldObjectComponent
     {
         public override WorldObjectComponentClientAvailability Availability => WorldObjectComponentClientAvailability.Always;
         [SyncToView] public override string IconName => "StorageComponent";
@@ -43,12 +45,6 @@
         [Eco, Sort(3), LocDescription("Control whether this storage is Hidden from other storages or Visible to them.")]
         public VisibilityMode Visibility { get; set; } = VisibilityMode.Visible;
 
-        /*[Autogen, RPC, UITypeName("BigButton"), Sort(6)]
-        public void Apply(Player player)
-        {
-            this.Apply();
-        }*/
-
         // UI Type ButtonGrid
         //[Autogen, RPC, UITypeName("BigButton")] public void SortAlphabetically(Player player) => SortAlphabeticallyInternal(this.linkComponent, player);
         //[Autogen, RPC] public void SortByType(Player player) => SortByTypeInternal(this.linkComponent, player);
@@ -64,7 +60,7 @@
             {
                 if (this.Visibility == VisibilityMode.Hidden)
                 {
-                    this.linkComponent.Destroy();
+                    //this.linkComponent.Destroy();
                 }
             });
 
@@ -86,21 +82,30 @@
             base.Destroy();
         }
 
+        // Allows to access ConcurrentHashSet without accessing it because its assembly is not available in the eco .cs build
+        private static IEnumerable<LinkComponent> RawLinked(LinkComponent link)
+        {
+            var prop = typeof(LinkComponent).GetProperty("LinkedObjects",
+                BindingFlags.Instance | BindingFlags.Public);
+            var enumerable = (IEnumerable)prop?.GetValue(link)!;
+            foreach (var x in enumerable) yield return (LinkComponent)x;
+        }
+
         private void Apply()
         {
-            this.linkComponent.Hidden = this.Visibility == VisibilityMode.Hidden;
+            var newVal = this.Visibility == VisibilityMode.Hidden;
 
-            if (this.linkComponent.Hidden)
+            if (this.linkComponent.Hidden != newVal)
             {
-                this.linkComponent.Destroy();
-            }
-            else
-            {
-                /* Not sure why, but adding a destroy here allows crafting component to correctly detect the storage when
-                 * world objects has been placed while the storage is hidden, and comes back to visible. Otherwise a double switch is necessary.
-                 * */
-                this.linkComponent.Destroy();
-                this.linkComponent.OnAfterObjectMoved();
+                this.linkComponent.Hidden = newVal;
+                // Force call to private function NotifyChanged
+                typeof(LinkComponent).GetMethod("NotifyChanged", BindingFlags.Instance | BindingFlags.NonPublic)?.Invoke(this.linkComponent, null);
+
+                // Force call to private function NotifyChanged to all linkedObjects of our linkComponent
+                foreach (var linkedComponents in RawLinked(this.linkComponent))
+                {
+                    typeof(LinkComponent).GetMethod("NotifyChanged", BindingFlags.Instance | BindingFlags.NonPublic)?.Invoke(linkedComponents, null);
+                }
             }
 
             this.storageControlRestriction.UpdateRestrictions(this.RestrictionMode, this.Items.Entries.Select(s => Item.Get((Type)s)).ToArray());
