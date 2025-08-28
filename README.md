@@ -16,4 +16,4 @@ Live updates: changes apply immediately.
 
 ## 💻 Installation
 
-Download files and copy them inside your Mods/UserCode folder in your eco server.
+Download folder CavRnMods and copy it inside your Mods/UserCode folder in your eco server.

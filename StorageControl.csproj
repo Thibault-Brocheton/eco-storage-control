@@ -16,7 +16,10 @@
 
   <ItemGroup>
     <Compile Remove="Stockpile.cs" />
-    <None Include="Stockpile.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="CavRnMods\StorageControl\Stockpile.cs" />
   </ItemGroup>
 
 </Project>
