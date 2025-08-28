@@ -17,4 +17,4 @@ Live updates: changes apply immediately.
 ## 💻 Installation
 
 Download folder CavRnMods and copy it inside your Mods/UserCode folder in your eco server.  
-If you are using the [StorageMore mod of Plex](https://mod.io/g/eco/m/stockagemore-6#description), you can add the file StorageMoreConnector. Otherwise, don't add it !
+If you are using the [StorageMore mod of Plex](https://mod.io/g/eco/m/stockagemore-6#description), you can add the file StorageMoreConnector.cs. Otherwise, don't add it !
