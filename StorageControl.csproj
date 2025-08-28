@@ -14,4 +14,9 @@
     <ProjectReference Include="..\Eco.Plugins\Eco.Plugins.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Stockpile.cs" />
+    <None Include="Stockpile.cs" />
+  </ItemGroup>
+
 </Project>
